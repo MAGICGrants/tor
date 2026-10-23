@@ -6,8 +6,10 @@ import 'package:native_toolchain_rust/native_toolchain_rust.dart';
 
 import 'prebuilt.dart';
 
-/// Build time recorded by the vendored OpenSSL (`OPENSSL_BUILT_ON`). Any fixed
-/// value makes the build reproducible; this is the native-0.2.0 commit time.
+/// Build time for any build script that records one. No crate in the lock
+/// does since OpenSSL was dropped; this keeps a new one from breaking
+/// reproducibility. Any fixed value works; this is the native-0.2.0 commit
+/// time.
 const _sourceDateEpoch = '1792525146';
 
 Future<void> main(List<String> args) async {
@@ -28,9 +30,10 @@ Future<void> main(List<String> args) async {
 /// Keeps the build machine out of the library's bytes.
 ///
 /// Flutter runs hooks with an allowlisted environment, so a caller's
-/// SOURCE_DATE_EPOCH, CARGO_HOME and RUSTFLAGS never reach cargo. OpenSSL then
-/// records the wall-clock time, and cargo falls back to `$HOME/.cargo`, whose
-/// absolute path ends up in the panic locations of every registry crate.
+/// SOURCE_DATE_EPOCH, CARGO_HOME and RUSTFLAGS never reach cargo. A build
+/// script would then record the wall-clock time, and cargo falls back to
+/// `$HOME/.cargo`, whose absolute path ends up in the panic locations of every
+/// registry crate.
 Map<String, String> reproducibleEnvironment() {
   final env = Platform.environment;
   final home = env['HOME'] ?? env['USERPROFILE'];

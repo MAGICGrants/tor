@@ -1,3 +1,11 @@
+## Unreleased
+
+* Use rustls with the ring crypto provider for relay connections on every
+  platform, instead of native-tls. Android and Linux no longer build or ship
+  OpenSSL 3.6.3, whose `openssl-src` line had no update path and whose
+  support ends on 2026-11-01. Apple and Windows no longer use the OS TLS,
+  so the iOS `security-framework` pin is gone.
+
 ## 0.2.0
 
 * Update the example to socks_socket 2.0.0, await Tor shutdown, and show start

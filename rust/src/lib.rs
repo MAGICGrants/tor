@@ -16,7 +16,7 @@ use std::{io, ptr};
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
-use tor_rtcompat::tokio::TokioNativeTlsRuntime;
+use tor_rtcompat::tokio::TokioRustlsRuntime;
 use tor_rtcompat::{NetStreamListener, NetStreamProvider, TcpListenOptions, ToplevelBlockOn};
 
 pub use crate::error::{tor_last_error_message, tor_string_free};
@@ -71,10 +71,20 @@ impl ClientRuntime {
     }
 
     /// An arti runtime that spawns onto this runtime without owning it.
-    fn arti(&self) -> io::Result<TokioNativeTlsRuntime> {
+    fn arti(&self) -> io::Result<TokioRustlsRuntime> {
         let _guard = self.0.as_ref().expect("runtime is live").enter();
-        TokioNativeTlsRuntime::current()
+        current_arti_runtime()
     }
+}
+
+/// An arti runtime for the tokio runtime that is current.
+///
+/// Arti's rustls runtime panics unless a process-wide rustls crypto provider
+/// is installed, so ring is installed first.
+fn current_arti_runtime() -> io::Result<TokioRustlsRuntime> {
+    // This fails only when a provider is already installed.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    TokioRustlsRuntime::current()
 }
 
 impl Drop for ClientRuntime {
@@ -98,7 +108,7 @@ impl Drop for ClientRuntime {
 struct ClientHandle {
     // Fields drop in order, so the client is released before its runtime
     // shuts down.
-    client: Arc<TorClient<TokioNativeTlsRuntime>>,
+    client: Arc<TorClient<TokioRustlsRuntime>>,
     cancel_bootstrap: watch::Sender<bool>,
     _runtime: ClientRuntime,
 }
@@ -107,7 +117,7 @@ struct ClientHandle {
 enum ProxyHandle {
     /// Bound but idle until `start`.
     Reserved {
-        client: Arc<TorClient<TokioNativeTlsRuntime>>,
+        client: Arc<TorClient<TokioRustlsRuntime>>,
         listeners: Vec<Listener>,
     },
     /// The accept loop is running.
@@ -115,7 +125,7 @@ enum ProxyHandle {
 }
 
 impl ProxyHandle {
-    fn new(client: Arc<TorClient<TokioNativeTlsRuntime>>, listeners: Vec<Listener>) -> Self {
+    fn new(client: Arc<TorClient<TokioRustlsRuntime>>, listeners: Vec<Listener>) -> Self {
         Self::Reserved { client, listeners }
     }
 
@@ -128,7 +138,7 @@ impl ProxyHandle {
 }
 
 fn into_client_handle(
-    client: Arc<TorClient<TokioNativeTlsRuntime>>,
+    client: Arc<TorClient<TokioRustlsRuntime>>,
     runtime: ClientRuntime,
 ) -> *mut c_void {
     let (cancel_bootstrap, _) = watch::channel(false);
@@ -441,7 +451,7 @@ pub unsafe extern "C" fn tor_proxy_stop(proxy: *mut c_void) {
     }
 }
 
-type Listener = <TokioNativeTlsRuntime as NetStreamProvider>::Listener;
+type Listener = <TokioRustlsRuntime as NetStreamProvider>::Listener;
 
 /// The runtime that drives the SOCKS accept loop.
 fn proxy_runtime() -> io::Result<&'static Runtime> {
@@ -452,7 +462,7 @@ fn proxy_runtime() -> io::Result<&'static Runtime> {
 
 fn start_proxy(
     rt: &Runtime,
-    client: Arc<TorClient<TokioNativeTlsRuntime>>,
+    client: Arc<TorClient<TokioRustlsRuntime>>,
     listeners: Vec<Listener>,
 ) -> JoinHandle<anyhow::Result<()>> {
     rt.spawn(run_proxy_with_listeners(
@@ -478,7 +488,7 @@ fn start_proxy(
 fn bind_localhost(rt: &Runtime, requested_port: u16) -> io::Result<(Vec<Listener>, u16)> {
     rt.block_on(async {
         // Arti binds through the runtime that is current, which is `rt`.
-        let runtime = TokioNativeTlsRuntime::current()?;
+        let runtime = current_arti_runtime()?;
         let options = TcpListenOptions::default();
         let mut retries_left = if requested_port == 0 {
             IPV6_BIND_RETRIES
@@ -626,9 +636,7 @@ mod tests {
 
     /// Build a client under `root` the same way `tor_start` does, minus
     /// bootstrapping.
-    fn unbootstrapped_client(
-        root: &Path,
-    ) -> (Arc<TorClient<TokioNativeTlsRuntime>>, ClientRuntime) {
+    fn unbootstrapped_client(root: &Path) -> (Arc<TorClient<TokioRustlsRuntime>>, ClientRuntime) {
         let runtime = ClientRuntime::new().unwrap();
         let cfg = TorClientConfigBuilder::from_directories(root.join("state"), root.join("cache"))
             .build()

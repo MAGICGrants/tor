@@ -15,9 +15,14 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 lazy_static = "1.4"
 tokio = { version = "1", features = ["full"] }
-arti-client = { version = "0.47.0", features = ["static", "onion-service-client"] }
-arti = { version = "2.7.0", features = ["experimental-api", "static"] }
-tor-rtcompat = { version = "0.47.0", features = ["static", "native-tls", "tokio"] }
+# TLS is rustls rather than native-tls, so no OpenSSL is built. The crypto
+# provider is ring, installed in lib.rs; Arti recommends aws-lc-rs, but that
+# adds a CMake and C build. Arti's defaults select native-tls, so the rest of
+# them are listed here.
+arti-client = { version = "0.47.0", default-features = false, features = ["tokio", "rustls", "compression", "static-sqlite", "onion-service-client"] }
+arti = { version = "2.7.0", default-features = false, features = ["experimental-api", "tokio", "rustls-ring", "static-sqlite", "dns-proxy", "harden", "compression", "bridge-client", "pt-client", "onion-service-client", "vanguards", "flowctl-cc"] }
+tor-rtcompat = { version = "0.47.0", features = ["rustls", "tokio"] }
+rustls = { version = "0.23.5", default-features = false, features = ["ring"] }
 log = "0.4.20"
 lzma-sys = { version = "0.1.20", features = ["static"] }
 #android_log-sys = "0.3.1"
@@ -26,10 +31,6 @@ anyhow = "1.0.79"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
-
-[target.'cfg(target_os = "ios")'.dependencies]
-# Specific version for iOS
-security-framework = "=2.10.0"
 
 [build-dependencies]
 cbindgen = "= 0.24.3"
