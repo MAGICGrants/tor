@@ -1,3 +1,24 @@
+## Unreleased
+
+* Use rustls with the ring crypto provider for relay connections on every
+  platform, instead of native-tls. Android and Linux no longer build or ship
+  OpenSSL 3.6.3, whose `openssl-src` line had no update path and whose
+  support ends on 2026-11-01. Apple and Windows no longer use the OS TLS,
+  so the iOS `security-framework` pin is gone.
+* Bump tokio to 1.54.1, async-compression to 0.4.51 (zstd 0.14 with
+  zstd-safe 8.2.0, liblzma in place of xz2) and ctutils to 0.4.7, which
+  clears the RustSec advisories against tokio 1.50, zstd-safe 7.1, zstd-sys
+  2.0 and ctutils 0.4.2. The statically linked xz library now comes from
+  liblzma-sys, the crate the new async-compression uses. The audit ignores
+  RUSTSEC-2026-0387 (crypto-bigint 0.5), an optional dependency no enabled
+  feature compiles.
+* Bump hickory-proto (used by Arti's DNS proxy) to 0.26.4, which fixes the
+  unbounded allocation when parsing a DNS question section
+  (GHSA-jwf5-j4q9-4jj8).
+* Bump url to 2.5.9 (RUSTSEC-2026-0592), rustix to 1.1.6
+  (RUSTSEC-2026-0486) and secmem-proc to 0.3.9 (RUSTSEC-2026-0591), each
+  within its semver range.
+
 ## 0.2.0
 
 * Update the example to socks_socket 2.0.0, await Tor shutdown, and show start
